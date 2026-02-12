@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+   <meta charset="UTF-8">
+   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+   <title>Tennis English - Learning Mode</title>
+   <script src="https://cdn.tailwindcss.com"></script>
+   <style>
+       body { margin: 0; overflow: hidden; background-color: #1a1a1a; font-family: 'Helvetica Neue', sans-serif; touch-action: none; color: white; display: flex; }
+       
+       /* 左側のサイドバー */
+       #sidebar {
+           height: 100vh; background: #262626; border-right: 2px solid #333;
+           display: flex; flex-direction: row; z-index: 100; overflow: hidden;
+       }
+       
+       /* 日付エリア */
+       #date-section { width: 140px; border-right: 1px solid #444; padding: 15px; overflow-y: auto; }
+       .date-btn {
+           background: #333; border: 1px solid #444; padding: 10px; margin-bottom: 8px;
+           border-radius: 6px; cursor: pointer; text-align: center; font-size: 0.8rem; transition: all 0.2s;
+       }
+       .date-btn:hover { background: #444; }
+       .date-btn.active { background: #2e7d32; border-color: #55efc4; box-shadow: 0 0 10px rgba(46,125,50,0.5); }
+       
+       /* フレーズリスト */
+       #phrase-list-container { width: 200px; padding: 15px; overflow-y: auto; background: #2a2a2a; }
+       .phrase-item {
+           font-size: 0.8rem; background: rgba(255,255,255,0.05); padding: 8px; margin-bottom: 6px; 
+           border-radius: 6px; border-left: 3px solid #55efc4;
+       }
+       .phrase-en { color: #55efc4; font-weight: bold; display: block; margin-bottom: 2px; }
+       .phrase-jp { color: #ccc; font-size: 0.7rem; }
+
+       /* メインゲームエリア */
+       #game-container { position: relative; flex-grow: 1; height: 100vh; display: flex; justify-content: center; align-items: center; background: #1a1a1a; overflow: hidden; }
+       
+       /* コート内にカーソルが入った時に非表示にする設定 */
+       canvas { background-color: #2e7d32; display: block; cursor: none; }
+
+       #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 20; }
+      
+       #opponent-quest {
+           position: absolute; top: 5%; left: 50%; transform: translateX(-50%);
+           text-align: center; width: 300px; word-wrap: break-word;
+       }
+       #title-text { font-size: 1.1rem; font-weight: bold; text-shadow: 2px 2px 4px #000; color: #ffffff; letter-spacing: 1px; }
+
+       /* 日本語お題エリア */
+       #jp-quest-area {
+           position: absolute; top: 32%; left: 50%; transform: translateX(-50%);
+           text-align: center; display: flex; justify-content: center; align-items: center;
+       }
+       #jp-text { 
+           font-weight: 900; text-shadow: 2px 2px 10px #000; color: #fff; 
+           white-space: nowrap; line-height: 1.2; 
+           width: auto;
+       }
+
+       #player-ui {
+           position: absolute; bottom: 32%; left: 50%; transform: translateX(-50%);
+           text-align: center; width: 90%;
+       }
+       #en-display { font-size: 2.2rem; font-weight: bold; color: #fff; text-shadow: 1px 1px 6px #000; min-height: 1.5em; letter-spacing: 2px; }
+      
+       #countdown {
+           position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+           font-size: 7rem; font-weight: 900; color: #ff7675; text-shadow: 0 0 20px rgba(0,0,0,0.8);
+           display: none; z-index: 25;
+       }
+
+       /* ラリー情報（右上端に調整） */
+       #round-info {
+           position: absolute; top: 10px; right: 10px; text-align: right;
+           background: rgba(0,0,0,0.8); padding: 8px 15px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2);
+           z-index: 30;
+       }
+
+       /* リザルトボード */
+       #result-board {
+           position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) scale(0);
+           width: 320px; background: #ffde00; color: #000;
+           padding: 20px; border-radius: 15px; border: 8px solid #000;
+           transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+           z-index: 100; text-align: center;
+           box-shadow: 10px 10px 0px rgba(0,0,0,0.3);
+           display: flex; flex-direction: column; align-items: center; justify-content: center;
+       }
+       #result-board.show { transform: translate(-50%, -50%) scale(1); }
+       #result-title { font-size: 1.2rem; font-weight: 900; background: #ff0000; color: #fff; padding: 2px 10px; margin-bottom: 10px; transform: rotate(-2deg); }
+       #result-msg { 
+           font-size: 3.5rem; font-weight: 900; line-height: 1.1; margin: 5px 0; 
+           font-family: 'Arial Black', sans-serif; color: #ff0000;
+           -webkit-text-stroke: 2px #fff; filter: drop-shadow(4px 4px 0px #000);
+       }
+       #result-stats { font-size: 1.3rem; font-weight: 900; border-bottom: 4px solid #000; margin-top: 10px; }
+
+       #start-hint {
+           position: absolute; bottom: 20%; left: 50%; transform: translateX(-50%);
+           color: #fff; font-size: 1.1rem; background: rgba(46,125,50,0.9);
+           padding: 10px 20px; border-radius: 40px; animation: pulse 1.5s infinite;
+           border: 2px solid #55efc4; white-space: nowrap; width: auto; text-align: center;
+       }
+       @keyframes pulse { 0% { opacity: 0.8; transform: translateX(-50%) scale(1); } 50% { opacity: 1; transform: translateX(-50%) scale(1.05); } 100% { opacity: 0.8; transform: translateX(-50%) scale(1); } }
+   </style>
+</head>
+<body>
+
+<div id="sidebar">
+    <div id="date-section">
+        <div class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Calendar</div>
+        <div id="date-area"></div>
+    </div>
+    
+    <div id="phrase-list-container">
+        <div class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Today's Phrases</div>
+        <div id="phrase-list"></div>
+    </div>
+</div>
+
+<div id="game-container">
+   <div id="ui-layer">
+       <div id="round-info">
+           <div class="text-[10px] uppercase opacity-70">Progress</div>
+           <div class="text-lg font-black italic"><span id="rally-count">0</span> / 5</div>
+           <div class="text-[10px] text-cyan-400 font-bold mt-1">Perfect: <span id="correct-count">0</span></div>
+       </div>
+
+       <div id="opponent-quest">
+           <div id="title-text">SELECT DATE</div>
+       </div>
+
+       <div id="jp-quest-area">
+           <div id="jp-text"></div>
+       </div>
+
+       <div id="player-ui">
+           <div id="en-display"></div>
+       </div>
+
+       <div id="countdown">3</div>
+
+       <div id="result-board">
+           <div id="result-title">★ MATCH RESULT ★</div>
+           <div id="result-msg">WIN!</div>
+           <div id="result-stats">Accuracy: 100%</div>
+       </div>
+
+       <div id="start-hint">ダブルタップまたはスペースキーでサーブ</div>
+   </div>
+   <canvas id="tennisCanvas"></canvas>
+</div>
+
+<script>
+   const canvas = document.getElementById('tennisCanvas');
+   const ctx = canvas.getContext('2d');
+   const rallyCountShow = document.getElementById('rally-count');
+   const correctCountShow = document.getElementById('correct-count');
+   const resultBoard = document.getElementById('result-board');
+   const resultMsg = document.getElementById('result-msg');
+   const resultStats = document.getElementById('result-stats');
+   const hintEl = document.getElementById('start-hint');
+   const questAreaEl = document.getElementById('opponent-quest');
+   const jpQuestArea = document.getElementById('jp-quest-area');
+   const titleTextEl = document.getElementById('title-text');
+   const jpTextEl = document.getElementById('jp-text');
+   const enDispEl = document.getElementById('en-display');
+   const countEl = document.getElementById('countdown');
+   
+   const dateAreaEl = document.getElementById('date-area');
+   const phraseListEl = document.getElementById('phrase-list');
+  
+   const SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRAWmRJRNgjq3OtDdRPDvf3uXywGfHW6_saJSkox9Q0jHOUrg9RzjYCMcCeB8r5aesQUPJo1p1Lvbbm/pub?gid=0&single=true&output=csv';
+
+   const DOUBLES_WIDTH = 10.97;
+   const SINGLES_WIDTH = 8.23;
+   const COURT_LENGTH = 20.0;
+   const RATIO = COURT_LENGTH / DOUBLES_WIDTH;
+   const BASE_SPEED = 7.5; 
+
+   let canvasW, canvasH, courtW, courtH, offsetX, offsetY, singlesOffsetX, scale;
+  
+   let currentRallyCount = 0;
+   let currentCorrectCount = 0;
+
+   let ball = { x: 0, y: 0, vx: 0, vy: 0, radius: 8, active: false, owner: 'none', waiting: true, bounced: false, paused: false, color: '#d4ff00' };
+   let player = { x: 0, y: 0, swing: 0 };
+   let cpu = { x: 0, y: 0, swing: 0 };
+
+   let allData = {};
+   let titlesData = {};
+   let questionList = [];
+   let currentIdx = 0;
+   let isCounting = false;
+   let countValue = 3;
+   let countTimer = null;
+   let recognition = null;
+   let isFinalShotAnimation = false;
+   let pendingResult = null; 
+   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+   const keys = { left: false, right: false };
+
+   async function loadCSV() {
+       try {
+           const res = await fetch(SHEET_URL);
+           const text = await res.text();
+           const rows = text.split('\n').filter(l => l.includes(',')).map(l => l.split(','));
+           
+           allData = {};
+           titlesData = {};
+           rows.slice(1).forEach(row => {
+               const date = row[0]?.trim();
+               if(!date) return;
+               titlesData[date] = row[1]?.trim() || "Tennis Lesson";
+               const list = [];
+               for(let i=2; i<=11; i+=2) {
+                   if(row[i] && row[i].trim().length > 0) {
+                       list.push({ en: row[i].trim(), jp: row[i+1]?.trim() || "" });
+                   }
+               }
+               if(list.length > 0) allData[date] = list;
+           });
+           renderDateButtons();
+       } catch(e) { console.error("CSV Load Error", e); }
+   }
+
+   function renderDateButtons() {
+       dateAreaEl.innerHTML = "";
+       const dates = Object.keys(allData);
+       dates.forEach((date, index) => {
+           const btn = document.createElement('div');
+           btn.className = "date-btn";
+           btn.textContent = date;
+           btn.onclick = () => selectDate(date);
+           dateAreaEl.appendChild(btn);
+           if(index === 0) selectDate(date);
+       });
+   }
+
+   function selectDate(date) {
+       titleTextEl.textContent = titlesData[date];
+       questionList = allData[date] || [];
+       currentIdx = 0;
+       document.querySelectorAll('.date-btn').forEach(b => {
+           b.classList.toggle('active', b.textContent === date);
+       });
+       
+       renderPhrases();
+       updateDisplay(); // 表示だけ更新（ボール打撃時に切り替える準備）
+       resetToServe(); 
+       player.x = canvasW / 2;
+       ball.x = player.x;
+   }
+
+   function renderPhrases() {
+       phraseListEl.innerHTML = "";
+       questionList.forEach(q => {
+           const item = document.createElement('div');
+           item.className = "phrase-item";
+           item.innerHTML = `<span class="phrase-en">${q.en}</span><span class="phrase-jp">${q.jp}</span>`;
+           phraseListEl.appendChild(item);
+       });
+   }
+
+   function resetToServe() {
+       ball.active = false;
+       ball.waiting = true;
+       ball.paused = false;
+       isFinalShotAnimation = false;
+       resultBoard.classList.remove('show');
+       hintEl.style.display = 'block';
+       currentRallyCount = 0;
+       currentCorrectCount = 0;
+       rallyCountShow.textContent = "0";
+       correctCountShow.textContent = "0";
+       enDispEl.style.color = "#fff";
+       ball.color = '#d4ff00';
+       player.x = canvasW / 2;
+       ball.x = player.x;
+       ball.y = player.y - 20;
+       updateDisplay(); 
+   }
+
+   function getMaskedDisplay(original, saidWords = []) {
+       const words = original.trim().split(/\s+/);
+       const hintThreshold = words.length > 1 ? 0 : -1; 
+
+       return words.map((w, i) => {
+           if (i === hintThreshold) return w;
+           const cleanW = w.toLowerCase().replace(/[.,?!]/g, "");
+           if (saidWords.some(s => s.toLowerCase().includes(cleanW))) return w;
+           return "_".repeat(w.length);
+       }).join(" ");
+   }
+
+   function adjustFontSize() {
+       const baseFontSizePx = 36;
+       const maxWidth = courtW * 0.9;
+       const temp = document.createElement('span');
+       temp.style.fontFamily = getComputedStyle(jpTextEl).fontFamily;
+       temp.style.fontSize = baseFontSizePx + 'px';
+       temp.style.fontWeight = '900';
+       temp.style.visibility = 'hidden';
+       temp.style.whiteSpace = 'nowrap';
+       temp.textContent = jpTextEl.textContent;
+       document.body.appendChild(temp);
+       let currentWidth = temp.offsetWidth;
+       let finalSize = baseFontSizePx;
+       if (currentWidth > maxWidth) {
+           const ratio = maxWidth / currentWidth;
+           finalSize = Math.max(16, baseFontSizePx * ratio);
+       }
+       jpTextEl.style.fontSize = finalSize + 'px';
+       document.body.removeChild(temp);
+   }
+
+   function updateDisplay() {
+       if(questionList.length === 0) return;
+       jpTextEl.textContent = questionList[currentIdx].jp;
+       enDispEl.textContent = getMaskedDisplay(questionList[currentIdx].en);
+       enDispEl.style.color = "#ffffff";
+       adjustFontSize();
+   }
+
+   function initSpeech() {
+       if (!SpeechRecognition || recognition) return;
+       recognition = new SpeechRecognition();
+       recognition.lang = 'en-US';
+       recognition.continuous = true;
+       recognition.interimResults = true;
+       recognition.onresult = (e) => {
+           let interim = '';
+           for (let i = e.resultIndex; i < e.results.length; ++i) interim += e.results[i][0].transcript;
+           const said = interim.toLowerCase().trim();
+           const saidWords = said.split(/\s+/);
+           const targetFull = questionList[currentIdx].en.toLowerCase().replace(/[.,?!]/g, "").trim();
+           
+           if (said.includes(targetFull)) {
+               enDispEl.textContent = questionList[currentIdx].en; 
+               if (isCounting) pendingResult = "correct";
+           } else {
+               enDispEl.textContent = getMaskedDisplay(questionList[currentIdx].en, saidWords);
+           }
+       };
+       recognition.start();
+   }
+
+   function startCountdown() {
+       if (isCounting || isFinalShotAnimation) return;
+       isCounting = true;
+       ball.paused = true;
+       pendingResult = null; 
+       countValue = 3;
+       countEl.textContent = countValue;
+       countEl.style.display = "block";
+       enDispEl.style.color = "#ffffff";
+       enDispEl.textContent = getMaskedDisplay(questionList[currentIdx].en);
+      
+       countTimer = setInterval(() => {
+           countValue--;
+           if (countValue <= 0) {
+               if (pendingResult === "correct") {
+                   currentCorrectCount++;
+                   correctCountShow.textContent = currentCorrectCount;
+                   successHit(true);
+               } else {
+                   successHit(false);
+               }
+           } else {
+               countEl.textContent = countValue;
+           }
+       }, 1000);
+   }
+
+   function stopCountdown() {
+       isCounting = false;
+       ball.paused = false;
+       clearInterval(countTimer);
+       countEl.style.display = "none";
+   }
+
+   function successHit(correct = true) {
+       stopCountdown();
+       currentRallyCount++;
+       rallyCountShow.textContent = currentRallyCount;
+       if (correct) { ball.color = '#00fbff'; enDispEl.style.color = "#00fbff"; } 
+       else { ball.color = '#ff4d4d'; enDispEl.style.color = "#ff4d4d"; }
+       let speedMult = correct ? 1.4 : 0.7;
+       ball.vy = -Math.abs(BASE_SPEED) * speedMult;
+       if (currentRallyCount >= 5) { handleSetEnd(); return; }
+       const targetX = singlesOffsetX + (Math.random() * (SINGLES_WIDTH * scale));
+       const distanceY = Math.abs(ball.y - cpu.y);
+       ball.vx = (targetX - ball.x) / (distanceY / Math.abs(ball.vy));
+       ball.owner = 'player';
+       ball.bounced = false;
+       player.swing = 1;
+       // 自分の打撃時にはインデックスを次に進めるが、表示はまだ変えない（相手の打撃時まで待つ）
+       currentIdx = (currentIdx + 1) % questionList.length;
+   }
+
+   function handleSetEnd() {
+       isFinalShotAnimation = true;
+       player.swing = 1;
+       ball.owner = 'player';
+       ball.bounced = false;
+       if (currentCorrectCount >= 3) {
+           const cornerX = (Math.random() > 0.5) ? singlesOffsetX + 30 : singlesOffsetX + (SINGLES_WIDTH * scale) - 30;
+           const distanceY = Math.abs(ball.y - cpu.y);
+           ball.vx = (cornerX - ball.x) / (distanceY / Math.abs(ball.vy));
+       } else {
+           ball.vx = (ball.x < canvasW/2) ? -12 : 12;
+       }
+   }
+
+   function initLayout() {
+       const container = document.getElementById('game-container');
+       canvasH = container.clientHeight;
+       canvasW = canvasH / RATIO;
+       if (canvasW > container.clientWidth) {
+           canvasW = container.clientWidth;
+           canvasH = canvasW * RATIO;
+       }
+       canvas.width = canvasW; canvas.height = canvasH;
+       courtW = canvasW * 0.95;
+       courtH = courtW * RATIO;
+       offsetX = (canvasW - courtW) / 2;
+       offsetY = (canvasH - courtH) / 2;
+       scale = courtW / DOUBLES_WIDTH;
+       singlesOffsetX = offsetX + (courtW - (SINGLES_WIDTH * scale)) / 2;
+       const sWidthPx = SINGLES_WIDTH * scale;
+       questAreaEl.style.width = `${sWidthPx}px`;
+       player.y = offsetY + courtH - 25;
+       player.x = canvasW / 2;
+       cpu.y = offsetY + 25;
+       cpu.x = canvasW / 2;
+       if (ball.waiting) { ball.x = player.x; ball.y = player.y - 20; }
+       resultBoard.style.width = `${Math.max(sWidthPx * 0.9, 300)}px`;
+       adjustFontSize();
+   }
+
+   async function startServe() {
+       if (!ball.active && ball.waiting) {
+            hintEl.style.display = 'none';
+            initSpeech();
+            resultBoard.classList.remove('show');
+            currentRallyCount = 0;
+            currentCorrectCount = 0;
+            isFinalShotAnimation = false;
+            rallyCountShow.textContent = "0";
+            correctCountShow.textContent = "0";
+            ball.active = true;
+            ball.waiting = false;
+            ball.paused = false;
+            ball.owner = 'player';
+            ball.bounced = false;
+            ball.color = '#d4ff00';
+            ball.vx = (Math.random() - 0.5) * 2.0;
+            ball.vy = -BASE_SPEED;
+            updateDisplay(); 
+       }
+   }
+
+   function showResult(win) {
+       resultMsg.textContent = win ? "勝ち!! " : "負け..";
+       resultMsg.style.color = win ? "#ff0000" : "#0000ff";
+       resultStats.textContent = `正解数: ${currentCorrectCount} / 5`;
+       resultBoard.classList.add('show');
+       setTimeout(() => { resetToServe(); }, 4000);
+   }
+
+   function drawCourt() {
+       ctx.fillStyle = '#1e5a22'; ctx.fillRect(0, 0, canvasW, canvasH);
+       ctx.fillStyle = '#2e7d32'; ctx.fillRect(offsetX, offsetY, courtW, courtH);
+       ctx.strokeStyle = 'white'; ctx.lineWidth = 3;
+       ctx.strokeRect(offsetX, offsetY, courtW, courtH);
+       const sWidthPx = SINGLES_WIDTH * scale;
+       ctx.strokeRect(singlesOffsetX, offsetY, sWidthPx, courtH);
+       const midY = canvasH / 2;
+       const sDist = 6.4 * (COURT_LENGTH / 23.77) * scale;
+       ctx.beginPath();
+       ctx.moveTo(canvasW/2, midY - sDist); ctx.lineTo(canvasW/2, midY + sDist);
+       ctx.stroke();
+       ctx.strokeStyle = 'rgba(255,255,255,0.8)'; ctx.lineWidth = 8;
+       ctx.beginPath(); ctx.moveTo(offsetX - 10, midY); ctx.lineTo(offsetX + courtW + 10, midY); ctx.stroke();
+       ctx.strokeStyle = 'white'; ctx.lineWidth = 2;
+       ctx.beginPath();
+       ctx.moveTo(singlesOffsetX, midY - sDist); ctx.lineTo(singlesOffsetX + sWidthPx, midY - sDist);
+       ctx.moveTo(singlesOffsetX, midY + sDist); ctx.lineTo(singlesOffsetX + sWidthPx, midY + sDist);
+       ctx.stroke();
+   }
+
+   function drawRacket(p, isPlayer) {
+       ctx.save();
+       ctx.translate(p.x, p.y);
+       ctx.rotate(p.swing * (isPlayer ? -1.8 : 1.8));
+       const color = isPlayer ? (isCounting ? '#ff7675' : '#fff') : '#ff4d4d';
+       ctx.strokeStyle = color;
+       ctx.lineWidth = 3;
+       ctx.beginPath(); ctx.ellipse(0, isPlayer ? -26 : 26, 14, 20, 0, 0, Math.PI * 2); ctx.stroke();
+       ctx.lineWidth = 1;
+       ctx.beginPath();
+       for(let i=-10; i<=10; i+=5) {
+           ctx.moveTo(i, isPlayer ? -42 : 10); ctx.lineTo(i, isPlayer ? -10 : 42);
+           ctx.moveTo(-12, isPlayer ? -26+i : 26+i); ctx.lineTo(12, isPlayer ? -26+i : 26+i);
+       }
+       ctx.stroke();
+       ctx.lineWidth = 6;
+       ctx.beginPath(); 
+       ctx.moveTo(0, isPlayer ? -6 : 6); 
+       ctx.lineTo(0, isPlayer ? 18 : -18); 
+       ctx.stroke();
+       ctx.restore();
+       if (p.swing > 0) p.swing -= 0.15;
+   }
+
+   function update() {
+       const moveSpeed = 10;
+       if (keys.left) player.x -= moveSpeed;
+       if (keys.right) player.x += moveSpeed;
+       player.x = Math.max(offsetX, Math.min(offsetX + courtW, player.x));
+
+       if (ball.waiting) { ball.x = player.x; ball.y = player.y - 20; return; }
+       if (!ball.active || ball.paused) return;
+       const prevBallY = ball.y;
+       ball.x += ball.vx;
+       ball.y += ball.vy;
+       const midY = canvasH / 2;
+       
+       const sDist = 6.4 * (COURT_LENGTH / 23.77) * scale;
+       const serviceLineY = ball.vy < 0 ? midY - sDist : midY + sDist;
+       if (!ball.bounced) {
+           if ((ball.vy < 0 && ball.y <= serviceLineY) || (ball.vy > 0 && ball.y >= serviceLineY)) {
+               ball.bounced = true;
+               if (ball.vy > 0 && !isFinalShotAnimation) { startCountdown(); }
+           }
+       }
+       const cpuLosing = isFinalShotAnimation && currentCorrectCount >= 3;
+       if (!cpuLosing) {
+           cpu.x += (ball.x - cpu.x) * 0.15;
+           // CPUが打つ瞬間
+           if (ball.vy < 0 && Math.abs(ball.y - cpu.y) < 25 && Math.abs(ball.x - cpu.x) < 40) {
+               if (!isFinalShotAnimation) {
+                   ball.vy = BASE_SPEED;
+                   const targetX = singlesOffsetX + (Math.random() * (SINGLES_WIDTH * scale));
+                   const distanceY = Math.abs(ball.y - player.y);
+                   ball.vx = (targetX - ball.x) / (distanceY / Math.abs(ball.vy));
+                   ball.owner = 'cpu';
+                   ball.bounced = false;
+                   cpu.swing = 1;
+                   ball.color = '#d4ff00';
+                   
+                   // 相手が打った瞬間に表示を更新
+                   updateDisplay();
+               }
+           }
+       } else { cpu.x += (ball.x - cpu.x) * 0.03; }
+       if (ball.y < offsetY - 50 || ball.y > offsetY + courtH + 50 || ball.x < -20 || ball.x > canvasW + 20) {
+           if (isFinalShotAnimation) { showResult(currentCorrectCount >= 3); isFinalShotAnimation = false; ball.active = false; } 
+           else if (ball.y < -100 || ball.y > canvasH + 100) { ball.active = false; resetToServe(); }
+       }
+   }
+
+   function draw() {
+       ctx.clearRect(0, 0, canvasW, canvasH);
+       drawCourt();
+       drawRacket(cpu, false);
+       drawRacket(player, true);
+       if (ball.active || ball.waiting) {
+           ctx.fillStyle = 'rgba(0,0,0,0.3)';
+           ctx.beginPath(); ctx.ellipse(ball.x, ball.y + 5, ball.radius, ball.radius * 0.5, 0, 0, Math.PI * 2); ctx.fill();
+           ctx.fillStyle = ball.color;
+           ctx.beginPath(); ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2); ctx.fill();
+       }
+       update();
+       requestAnimationFrame(draw);
+   }
+
+   function handleInputPosition(clientX) {
+       const rect = canvas.getBoundingClientRect();
+       const ratio = (clientX - rect.left) / rect.width;
+       const targetX = canvasW * ratio;
+       player.x = Math.max(offsetX, Math.min(offsetX + courtW, targetX));
+   }
+
+   window.addEventListener('mousemove', (e) => handleInputPosition(e.clientX));
+   window.addEventListener('touchmove', (e) => { 
+       e.preventDefault(); 
+       handleInputPosition(e.touches[0].clientX); 
+   }, { passive: false });
+
+   window.addEventListener('keydown', (e) => {
+       if (e.key === 'ArrowLeft' || e.key === 'a') keys.left = true;
+       if (e.key === 'ArrowRight' || e.key === 'd') keys.right = true;
+       if (e.key === ' ') startServe(); 
+   });
+   window.addEventListener('keyup', (e) => {
+       if (e.key === 'ArrowLeft' || e.key === 'a') keys.left = false;
+       if (e.key === 'ArrowRight' || e.key === 'd') keys.right = false;
+   });
+
+   window.addEventListener('dblclick', startServe);
+   let lastTap = 0;
+   window.addEventListener('touchstart', (e) => {
+       const now = Date.now();
+       if (now - lastTap < 300) startServe();
+       lastTap = now;
+   });
+
+   window.addEventListener('resize', initLayout);
+   window.onload = () => { initLayout(); loadCSV(); draw(); };
+</script>
+</body>
+</html>
